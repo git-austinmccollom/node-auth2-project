@@ -2,6 +2,8 @@ const express = require("express");
 const helmet = require("helmet");
 const dbFun = require("./dbFunctions");
 const bcrypt = require("bcryptjs");
+const jwt = require("jsonwebtoken");
+const secrets = require("./config/secrets.js")
 
 const server = express();
 server.use(helmet());
@@ -31,15 +33,31 @@ server.post("/api/login", (req, res) => {
     .findByUsername(username)
     .then((user) => {
       if (user && bcrypt.compareSync(password, user.password)) {
-        res.status(200).json({ message: `Welcome: ${user.username}!` });
+          const token = generateToken(user);
+          // the server needs to return the token to the client
+        // this doesn't happen automatically like it happens with cookies
+        res.status(200).json({ message: `Welcome: ${user.username}! you have a token`, token });
       } else {
-        res.status(401).json({ error: "Incorrect credentials" });
+        res.status(401).json({ error: "You shall not pass!" });
       }
     })
     .catch((error) => {
       res.status(500).json(error);
     });
 });
+
+function generateToken(user) {
+    const payload = {
+        subject: user.id,
+        username: user.username
+    }
+
+    const options = {
+        expiresIn: '1h'
+    };
+
+    return jwt.sign(payload, secrets.jwtSecret, options)
+}
 
 //Read
 server.get("/api/users", (req, res) => {
