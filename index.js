@@ -3,11 +3,30 @@ const helmet = require("helmet");
 const dbFun = require("./dbFunctions");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
-const secrets = require("./config/secrets.js")
+const { jwtSecret } = require("./config/secrets.js")
 
 const server = express();
 server.use(helmet());
 server.use(express.json());
+
+//Middleware
+
+const restricted = (req, res, next) => {
+    const token = req.headers.authorization;
+
+    if (token) {
+        jwt.verify(token, jwtSecret, (err, decodedToken) => {
+            if (err) {
+                res.status(401).json({ message: "jwt error"})
+            } else {
+                req.jwt = decodedToken;
+                next();
+            }
+        });
+    } else {
+        res.status(401).json({ message: "you shall not pass"})
+    }
+}
 
 //Register
 server.post("/api/register", (req, res) => {
@@ -49,18 +68,19 @@ server.post("/api/login", (req, res) => {
 function generateToken(user) {
     const payload = {
         subject: user.id,
-        username: user.username
+        username: user.username,
+        role: user.role
     }
 
     const options = {
         expiresIn: '1h'
     };
 
-    return jwt.sign(payload, secrets.jwtSecret, options)
+    return jwt.sign(payload, jwtSecret, options)
 }
 
 //Read
-server.get("/api/users", (req, res) => {
+server.get("/api/users", restricted, (req, res) => {
   dbFun
     .findUsers()
     .then((dbRes) => {
@@ -70,6 +90,21 @@ server.get("/api/users", (req, res) => {
       res.status(500).json(dbErr);
     });
 });
+
+//Logout
+server.get("/api/logout", (req, res) => {
+    if (req.session) {
+        req.session.destroy( err => {
+            if(err) {
+                res.send("error logging out");
+            } else {
+                res.send("good bye");
+            }
+        })
+    } else {
+        res.send("you aren't logged in, or you don't have a session")
+    }
+})
 
 // Sanity check
 server.get("/", (req, res) => {
